@@ -7,13 +7,19 @@ terjemahan bahasa Indonesia. Data diambil dari
 
 ## Fitur
 
-- **Beranda** — daftar 9 kitab hadis beserta jumlah hadisnya.
+- **Beranda** — daftar 9 kitab hadis beserta jumlah hadisnya dan deret topik
+  pilihan.
 - **Daftar hadis** — pagination 20 hadis per halaman dengan *lazy loading*
   saat di-scroll dan *pull to refresh*.
 - **Detail hadis** — nomor hadis, teks Arab (RTL), dan terjemahan Indonesia
   yang bisa diseleksi.
 - **Pencarian** — masukkan nomor hadis untuk membuka detail secara langsung,
   atau kata kunci untuk memindai kitab terpilih. Pencarian bisa dihentikan.
+- **Topik hadis** — halaman kategori (Niat, Iman, Shalat, Akhlak, Makanan &
+  Minuman, Sabar, Ilmu, Sedekah) lengkap dengan hadis rujukan dan hasil
+  pencarian kata kunci.
+- **Mode offline (Hive)** — kitab, halaman daftar, detail hadis, dan hasil
+  pencarian yang pernah dimuat disimpan otomatis di perangkat.
 - **Tema** — Material 3 dengan palet hijau tua, putih kehijauan, dan aksen
   emas.
 - **Splash screen & app icon** — dibuat dengan `flutter_native_splash` dan
@@ -119,34 +125,43 @@ flutter_launcher_icons:
 
 ```
 lib/
-├── main.dart                       # Entry point + MultiProvider
+├── main.dart                       # Entry point, init Hive, + MultiProvider
 ├── core/
 │   ├── api_config.dart             # Base URL, timeout, ukuran halaman
 │   ├── api_exception.dart          # Exception dengan pesan ramah pengguna
 │   ├── app_theme.dart              # Tema Material 3 hijau/putih/emas
+│   ├── fetch_result.dart           # Penanda hasil dari API atau cache
 │   ├── formatters.dart             # Format angka 6.638
 │   ├── json_utils.dart             # Parsing angka dari JSON
 │   ├── safe_change_notifier.dart   # ChangeNotifier aman saat di-dispose
-│   └── text_normalizer.dart        # Normalisasi Arab/harakat untuk pencarian
+│   ├── text_normalizer.dart        # Normalisasi Arab/harakat untuk pencarian
+│   └── topic_catalog.dart          # Daftar topik + hadis rujukannya
 ├── models/
-│   ├── hadith_book.dart            # Kitab (name, slug, total)
-│   ├── hadith.dart                 # Hadis (number, arab, terjemahan)
-│   └── hadith_page.dart            # Pagination + halaman daftar hadis
+│   ├── hadith_book.dart            # Kitab (name, slug, total) + toJson
+│   ├── hadith.dart                 # Hadis (number, arab, terjemahan) + toJson
+│   ├── hadith_page.dart            # Pagination + halaman daftar hadis
+│   └── hadith_topic.dart           # Topik + referensi hadisnya
 ├── services/
-│   └── hadith_api_service.dart     # Semua pemanggilan HTTP ke API
+│   ├── hadith_api_service.dart     # Semua pemanggilan HTTP ke API
+│   ├── hadith_repository.dart      # Gabungan API + cache (network-first)
+│   └── local_cache_service.dart    # Penyimpanan offline berbasis Hive
 ├── providers/
 │   ├── books_provider.dart         # State daftar kitab
 │   ├── hadith_list_provider.dart   # State daftar hadis + lazy loading
 │   ├── hadith_detail_provider.dart # State detail hadis
-│   └── hadith_search_provider.dart # State pencarian + pembatalan
+│   ├── hadith_search_provider.dart # State pencarian + pembatalan
+│   └── topic_provider.dart         # State hadis per topik
 ├── views/
-│   ├── home_view.dart              # Beranda
+│   ├── home_view.dart              # Beranda (kitab + deret topik)
 │   ├── hadith_list_view.dart       # Daftar hadis per kitab
 │   ├── hadith_detail_view.dart     # Detail hadis
-│   └── search_view.dart            # Pencarian nomor/kata kunci
+│   ├── search_view.dart            # Pencarian nomor/kata kunci
+│   ├── topics_view.dart            # Daftar seluruh topik
+│   └── topic_detail_view.dart      # Hadis per topik
 └── widgets/
     ├── kitab_card.dart
     ├── hadith_tile.dart
+    ├── topic_card.dart
     ├── loading_state.dart
     └── status_message.dart
 ```
@@ -154,10 +169,77 @@ lib/
 Arsitektur memakai pemisahan sederhana yang mirip Clean Architecture:
 
 - **models** — representasi data API, tanpa dependensi UI.
-- **services** — akses jaringan (`package:http`) dan pemetaan error.
+- **services** — akses jaringan (`package:http`), penyimpanan lokal Hive, dan
+  lapisan [HadithRepository] yang menggabungkan keduanya.
 - **providers** — state management (`provider` + `ChangeNotifier`), tidak
   mengakses widget.
 - **views/widgets** — hanya menampilkan state dan meneruskan aksi pengguna.
+
+## Mode Offline (Penyimpanan Lokal Hive)
+
+Library: `hive_ce` + `hive_ce_flutter` (fork Hive yang aktif, kompatibel
+mundur dengan API Hive).
+
+**Box yang dipakai** (`lib/services/local_cache_service.dart`):
+
+| Box | Key | Value |
+| --- | --- | --- |
+| `hadis_books` | slug kitab | `{name, slug, total}` |
+| `hadis_hadiths` | `{slug}_{nomor}` | `{number, arab, id, name, slug}` |
+
+**Cara kerja** — strategi *network-first, cache fallback* di
+`HadithRepository`:
+
+1. Setiap permintaan (daftar kitab, halaman daftar hadis, detail hadis, hasil
+   pencarian) dicoba ke API terlebih dahulu.
+2. Hasil sukses **otomatis disimpan** ke Hive sebelum dikembalikan ke UI.
+3. Bila API gagal (offline/server bermasalah), repository mengambil dari
+   cache dan menandainya lewat `FetchResult.fromCache`.
+4. Bila cache juga kosong, error aslinya diteruskan ke UI.
+
+**Pembacaan offline:**
+
+- Daftar kitab → seluruh isi box `hadis_books`.
+- Daftar hadis per halaman → hadis kitab tersebut di-cache diurutkan per
+  nomor lalu di-*slice* sesuai halaman (totalItems diisi jumlah benar-benar
+  tersimpan agar UI tidak menjanjikan halaman yang belum ada).
+- Detail hadis → pencarian langsung per `{slug}_{nomor}`.
+- Pencarian kata kunci → pemindaian teks pada seluruh data tersimpan
+  (normalisasi harakat Arab dipakai ulang).
+- Halaman beranda menampilkan banner **Mode offline** ketika data datang dari
+  cache.
+
+**Dukungan lintas platform:** Hive menyimpan data di direktori dokumen
+aplikasi (Android/iOS/desktop) dan IndexedDB di web.
+
+## Topik / Kategori Hadis
+
+Daftar topik ada di `lib/core/topic_catalog.dart`, tiap topik memuat
+`keywords` (kata kunci pencarian lokal) dan `references` (kitab + nomor hadis
+rujukan yang sudah diperiksa dari data API):
+
+| Topik | Kata kunci contoh | Hadis rujukan |
+| --- | --- | --- |
+| Niat | niat, نيّة | Bukhari 1 |
+| Iman | iman, beriman | Bukhari 7, Muslim 19 |
+| Shalat | shalat, sholat, salat | Bukhari 497, Muslim 12 |
+| Akhlak | akhlak, budi pekerti | Muslim 3941, Bukhari 3972 |
+| Makanan & Minuman | makanan, minuman | Muslim 3556, Bukhari 235 |
+| Sabar | sabar, kesabaran | Bukhari 1376, Muslim 1452 |
+| Ilmu | ilmu, menuntut ilmu | Bukhari 77, Tirmidzi 2504 |
+| Sedekah | sedekah, infak | Bukhari 53, Bukhari 4632 |
+
+**Cara kerja `TopicProvider`:**
+
+1. Ambil hadis rujukan topik yang **sudah tersimpan di Hive** dan tambahkan
+   hasil pencarian `keywords` pada seluruh cache → langsung ditampilkan
+   (cepat walau offline).
+2. Rujukan yang belum ada diambil dari API berdasarkan kitab + nomor lalu
+   disimpan ke Hive.
+3. Bila sebagian rujukan gagal diambil, banner info menawarkan muat ulang
+   ketika perangkat kembali daring.
+4. Tombol di bagian bawah membuka halaman pencarian dengan kata kunci topik
+   terisi otomatis.
 
 ## API yang Digunakan
 
@@ -193,8 +275,9 @@ flutter analyze
 flutter test
 ```
 
-Test unit mencakup format angka, parsing model, dan normalisasi teks Arab untuk
-pencarian.
+Test unit mencakup format angka, parsing model, normalisasi teks Arab untuk
+pencarian, serta perilaku cache offline (penyimpanan kitab, penyusunan ulang
+halaman, pencarian lokal, dan kunci cache).
 
 ## Kredit
 

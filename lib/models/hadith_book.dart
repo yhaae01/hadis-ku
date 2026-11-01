@@ -19,4 +19,8 @@ class HadithBook {
       total: parseIntValue(json['total']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {'name': name, 'slug': slug, 'total': total};
+  }
 }

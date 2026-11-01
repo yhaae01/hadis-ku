@@ -3,19 +3,22 @@ import '../core/api_exception.dart';
 import '../core/safe_change_notifier.dart';
 import '../models/hadith.dart';
 import '../models/hadith_book.dart';
-import '../services/hadith_api_service.dart';
+import '../services/hadith_repository.dart';
 
 /// Mengelola daftar hadis satu kitab dengan pagination/lazy loading.
+///
+/// Data yang berhasil dimuat otomatis tersimpan di Hive, sehingga halaman
+/// yang pernah dibuka tetap bisa dibaca saat perangkat offline.
 class HadithListProvider extends SafeChangeNotifier {
-  HadithListProvider({required this.book, HadithApiService? service})
-      : _service = service ?? HadithApiService();
+  HadithListProvider({required this.book, required this.repository});
 
   final HadithBook book;
-  final HadithApiService _service;
+  final HadithRepository repository;
 
   final List<Hadith> _items = [];
   bool _isInitialLoading = false;
   bool _isLoadingMore = false;
+  bool _isFromCache = false;
   String? _error;
   String? _loadMoreError;
   int _currentPage = 0;
@@ -25,6 +28,9 @@ class HadithListProvider extends SafeChangeNotifier {
   List<Hadith> get items => _items;
   bool get isInitialLoading => _isInitialLoading;
   bool get isLoadingMore => _isLoadingMore;
+
+  /// True bila halaman yang ditampilkan berasal dari cache offline.
+  bool get isFromCache => _isFromCache;
   String? get error => _error;
   String? get loadMoreError => _loadMoreError;
   bool get hasMore => _currentPage < _totalPages;
@@ -39,11 +45,12 @@ class HadithListProvider extends SafeChangeNotifier {
     safeNotifyListeners();
 
     try {
-      final page = await _service.fetchHadiths(
+      final result = await repository.fetchHadiths(
         book.slug,
         page: 1,
         limit: ApiConfig.pageSize,
       );
+      final page = result.data;
 
       _items
         ..clear()
@@ -51,6 +58,7 @@ class HadithListProvider extends SafeChangeNotifier {
       _currentPage = page.pagination.currentPage;
       _totalPages = page.pagination.totalPages;
       _totalItems = page.pagination.totalItems;
+      _isFromCache = result.fromCache;
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
@@ -69,11 +77,12 @@ class HadithListProvider extends SafeChangeNotifier {
     safeNotifyListeners();
 
     try {
-      final page = await _service.fetchHadiths(
+      final result = await repository.fetchHadiths(
         book.slug,
         page: _currentPage + 1,
         limit: ApiConfig.pageSize,
       );
+      final page = result.data;
 
       _items.addAll(page.items);
       _currentPage = page.pagination.currentPage;

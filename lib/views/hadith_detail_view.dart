@@ -5,6 +5,7 @@ import '../core/app_theme.dart';
 import '../core/formatters.dart';
 import '../models/hadith_book.dart';
 import '../providers/hadith_detail_provider.dart';
+import '../services/hadith_repository.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/status_message.dart';
 
@@ -22,8 +23,11 @@ class HadithDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<HadithDetailProvider>(
-      create: (_) =>
-          HadithDetailProvider(book: book, number: number)..load(),
+      create: (context) => HadithDetailProvider(
+        book: book,
+        number: number,
+        repository: context.read<HadithRepository>(),
+      )..load(),
       child: _HadithDetailBody(book: book, number: number),
     );
   }

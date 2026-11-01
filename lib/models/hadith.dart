@@ -30,4 +30,15 @@ class Hadith {
       bookSlug: (json['slug'] ?? bookSlug).toString(),
     );
   }
+
+  /// Format yang sama dengan respons API agar mudah disimpan di Hive.
+  Map<String, dynamic> toJson() {
+    return {
+      'number': number,
+      'arab': arabic,
+      'id': translation,
+      'name': bookName,
+      'slug': bookSlug,
+    };
+  }
 }

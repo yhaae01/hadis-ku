@@ -2,26 +2,28 @@ import '../core/api_exception.dart';
 import '../core/safe_change_notifier.dart';
 import '../models/hadith.dart';
 import '../models/hadith_book.dart';
-import '../services/hadith_api_service.dart';
+import '../services/hadith_repository.dart';
 
-/// Memuat detail satu hadis berdasarkan kitab dan nomornya.
+/// Memuat detail satu hadis dari internet; bila gagal, mengambil dari cache.
 class HadithDetailProvider extends SafeChangeNotifier {
   HadithDetailProvider({
     required this.book,
     required this.number,
-    HadithApiService? service,
-  }) : _service = service ?? HadithApiService();
+    required this.repository,
+  });
 
   final HadithBook book;
   final int number;
-  final HadithApiService _service;
+  final HadithRepository repository;
 
   Hadith? _hadith;
   bool _isLoading = false;
+  bool _isFromCache = false;
   String? _error;
 
   Hadith? get hadith => _hadith;
   bool get isLoading => _isLoading;
+  bool get isFromCache => _isFromCache;
   String? get error => _error;
 
   Future<void> load() async {
@@ -32,7 +34,9 @@ class HadithDetailProvider extends SafeChangeNotifier {
     safeNotifyListeners();
 
     try {
-      _hadith = await _service.fetchHadith(book.slug, number);
+      final result = await repository.fetchHadith(book.slug, number);
+      _hadith = result.data;
+      _isFromCache = result.fromCache;
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {

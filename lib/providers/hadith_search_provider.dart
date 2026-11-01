@@ -1,19 +1,22 @@
 import '../core/api_exception.dart';
 import '../core/safe_change_notifier.dart';
 import '../models/hadith.dart';
-import '../services/hadith_api_service.dart';
+import '../services/hadith_repository.dart';
 
 /// Menangani pencarian nomor hadis (langsung ke endpoint detail) dan
 /// pencarian kata kunci (memindai endpoint daftar per halaman).
+///
+/// Bila jaringan gagal, pencarian otomatis dijalankan terhadap data yang
+/// tersimpan di perangkat sehingga hasil tetap muncul saat offline.
 class HadithSearchProvider extends SafeChangeNotifier {
-  HadithSearchProvider({HadithApiService? service})
-      : _service = service ?? HadithApiService();
+  HadithSearchProvider({required this.repository});
 
-  final HadithApiService _service;
+  final HadithRepository repository;
 
   List<Hadith> _results = const [];
   bool _isSearching = false;
   bool _hasSearched = false;
+  bool _isFromCache = false;
   bool _cancelRequested = false;
   String? _error;
   String? _info;
@@ -23,6 +26,7 @@ class HadithSearchProvider extends SafeChangeNotifier {
   List<Hadith> get results => _results;
   bool get isSearching => _isSearching;
   bool get hasSearched => _hasSearched;
+  bool get isFromCache => _isFromCache;
   String? get error => _error;
   String? get info => _info;
   int get scannedPage => _scannedPage;
@@ -44,6 +48,7 @@ class HadithSearchProvider extends SafeChangeNotifier {
 
     _isSearching = true;
     _hasSearched = false;
+    _isFromCache = false;
     _cancelRequested = false;
     _error = null;
     _info = null;
@@ -56,14 +61,15 @@ class HadithSearchProvider extends SafeChangeNotifier {
       final number = int.tryParse(query);
 
       if (number != null) {
-        final hadith = await _service.fetchHadith(slug, number);
+        final result = await repository.fetchHadith(slug, number);
         if (_cancelRequested) return;
 
-        _results = [hadith];
+        _results = [result.data];
+        _isFromCache = result.fromCache;
         _scannedPage = 1;
         _totalPages = 1;
       } else {
-        _results = await _service.searchHadiths(
+        final result = await repository.searchHadiths(
           slug: slug,
           keyword: query,
           isCancelled: () => _cancelRequested || isDisposed,
@@ -75,6 +81,8 @@ class HadithSearchProvider extends SafeChangeNotifier {
         );
 
         if (_cancelRequested) return;
+        _results = result.data;
+        _isFromCache = result.fromCache;
       }
 
       _hasSearched = true;

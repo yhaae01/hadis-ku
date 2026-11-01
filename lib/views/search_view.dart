@@ -8,43 +8,50 @@ import '../models/hadith.dart';
 import '../models/hadith_book.dart';
 import '../providers/books_provider.dart';
 import '../providers/hadith_search_provider.dart';
+import '../services/hadith_repository.dart';
 import '../widgets/hadith_tile.dart';
 import '../widgets/status_message.dart';
 import 'hadith_detail_view.dart';
 
 /// Pencarian hadis berdasarkan nomor atau kata kunci.
 class SearchView extends StatelessWidget {
-  const SearchView({super.key, this.initialSlug});
+  const SearchView({super.key, this.initialSlug, this.initialKeyword});
 
   /// Kitab yang langsung dipilih saat halaman dibuka.
   final String? initialSlug;
 
+  /// Kata kunci yang sudah terisi di kolom pencarian.
+  final String? initialKeyword;
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<HadithSearchProvider>(
-      create: (_) => HadithSearchProvider(),
-      child: _SearchForm(initialSlug: initialSlug),
+      create: (context) =>
+          HadithSearchProvider(repository: context.read<HadithRepository>()),
+      child: _SearchForm(initialSlug: initialSlug, initialKeyword: initialKeyword),
     );
   }
 }
 
 class _SearchForm extends StatefulWidget {
-  const _SearchForm({this.initialSlug});
+  const _SearchForm({this.initialSlug, this.initialKeyword});
 
   final String? initialSlug;
+  final String? initialKeyword;
 
   @override
   State<_SearchForm> createState() => _SearchFormState();
 }
 
 class _SearchFormState extends State<_SearchForm> {
-  final TextEditingController _keywordController = TextEditingController();
+  late final TextEditingController _keywordController;
   late String _selectedSlug;
 
   @override
   void initState() {
     super.initState();
     _selectedSlug = widget.initialSlug ?? 'bukhari';
+    _keywordController = TextEditingController(text: widget.initialKeyword);
   }
 
   @override

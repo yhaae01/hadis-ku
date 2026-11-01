@@ -4,12 +4,16 @@ import 'package:provider/provider.dart';
 
 import '../core/app_theme.dart';
 import '../core/formatters.dart';
+import '../core/topic_catalog.dart';
 import '../providers/books_provider.dart';
 import '../widgets/kitab_card.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/status_message.dart';
+import '../widgets/topic_card.dart';
 import 'hadith_list_view.dart';
 import 'search_view.dart';
+import 'topic_detail_view.dart';
+import 'topics_view.dart';
 
 /// Halaman utama: sapaan, akses pencarian, dan daftar kitab hadis.
 class HomeView extends StatelessWidget {
@@ -18,6 +22,7 @@ class HomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BooksProvider>();
+    final theme = Theme.of(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -53,6 +58,13 @@ class HomeView extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                if (provider.isFromCache &&
+                                    provider.books.isNotEmpty) ...[
+                                  _OfflineBanner(
+                                    cachedHadiths: provider.cachedHadiths,
+                                  ),
+                                  const SizedBox(height: 14),
+                                ],
                                 _SearchEntry(
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute<void>(
@@ -61,6 +73,56 @@ class HomeView extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 26),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Jelajahi Topik',
+                                      style: theme.textTheme.titleLarge,
+                                    ),
+                                    const Spacer(),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => const TopicsView(),
+                                        ),
+                                      ),
+                                      child: const Text('Lihat semua'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Hadis rujukan tiap topik disimpan otomatis '
+                                  'ke perangkat untuk mode offline.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  height: 122,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: hadithTopics.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(width: 12),
+                                    itemBuilder: (context, index) {
+                                      final topic = hadithTopics[index];
+                                      return TopicCard(
+                                        topic: topic,
+                                        onTap: () =>
+                                            Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) =>
+                                                TopicDetailView(topic: topic),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
                                 Row(
                                   children: [
                                     Text(
@@ -323,6 +385,49 @@ class _HomeHeader extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner({required this.cachedHadiths});
+
+  final int cachedHadiths;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.cloud_off_rounded,
+            size: 18,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              cachedHadiths > 0
+                  ? 'Mode offline: menampilkan data dari penyimpanan perangkat '
+                      '($cachedHadiths hadis tersimpan).'
+                  : 'Mode offline: menampilkan data terakhir dari penyimpanan '
+                      'perangkat.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

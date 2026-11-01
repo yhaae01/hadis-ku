@@ -5,6 +5,7 @@ import '../core/app_theme.dart';
 import '../core/formatters.dart';
 import '../models/hadith_book.dart';
 import '../providers/hadith_list_provider.dart';
+import '../services/hadith_repository.dart';
 import '../widgets/hadith_tile.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/status_message.dart';
@@ -20,7 +21,10 @@ class HadithListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<HadithListProvider>(
-      create: (_) => HadithListProvider(book: book)..loadInitial(),
+      create: (context) => HadithListProvider(
+        book: book,
+        repository: context.read<HadithRepository>(),
+      )..loadInitial(),
       child: _HadithListBody(book: book),
     );
   }
