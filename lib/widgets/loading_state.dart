@@ -1,14 +1,27 @@
 import 'package:flutter/material.dart';
 
-/// Indikator loading dengan keterangan singkat.
+import '../core/app_theme.dart';
+
+/// Indikator loading bernuansa tema Islami (hijau tua & aksen emas)
+/// dengan teks status informatif.
 class LoadingState extends StatelessWidget {
-  const LoadingState({super.key, this.message = 'Memuat data...'});
+  const LoadingState({
+    super.key,
+    this.message = 'Memuat data...',
+    this.submessage,
+    this.useAccent = false,
+  });
 
   final String message;
+  final String? submessage;
+
+  /// Gunakan aksen emas untuk loading khusus atau kontras gelap.
+  final bool useAccent;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final primaryIndicatorColor = useAccent ? AppTheme.gold : AppTheme.green;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
@@ -16,19 +29,34 @@ class LoadingState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 3),
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(primaryIndicatorColor),
+                backgroundColor: primaryIndicatorColor.withValues(alpha: 0.15),
+              ),
             ),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
               ),
             ),
+            if (submessage != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                submessage!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
         ),
       ),
